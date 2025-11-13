@@ -22,6 +22,12 @@ This repository collects all public knowledge, specifications, and reflections t
 - [`axv-systems`](https://github.com/axv-crew/axv-systems) — automation and infrastructure  
 - [`axv-life`](https://github.com/axv-crew/axv-life) — public interface  
 
+## Atlas & Compute – Global Plan
+
+Oficjalna architektura AXV (Hybrid C) opisana jest tutaj:
+
+- [`technical_specs/AXV_Atlas_Compute_Global_Plan_v1.md`](technical_specs/AXV_Atlas_Compute_Global_Plan_v1.md)
+
 ---
 
 > _"We record not just what we build, but why we build it."_  
