@@ -2,168 +2,168 @@
 
 **Author:** Aster × Wojtek  
 **Version:** v0.1  
-**Status:** Draft (public‑safe, implementation details can live in a separate internal doc)
+**Status:** Draft (public-safe, implementation details can live in a separate internal doc)
 
 ---
 
 ## 1. Scope
 
-Ten dokument opisuje **zachowanie i UI** systemu **AXV Cargo Bay** z perspektywy użytkownika:
+This document describes the **behaviour and UI** of **AXV Cargo Bay** from the user’s perspective:
 
-- jakie są **role** (warehouse / crew / admin),
-- jakie są **główne widoki** (web + mobile),
-- jak działa **przepływ sprzętu** w kontekście misji (packing lists),
-- jak zachowuje się UI po **zeskanowaniu QR**.
+- what **roles** exist (warehouse / crew / admin),
+- what the **main views** are (web + mobile),
+- how **gear flows** in the context of missions (packing lists),
+- how the UI behaves after **scanning a QR code**.
 
-**Model danych i schema DB** są opisane w:  
+**Data model and DB schema** are defined in:  
 `05_AXV_Cargo_Bay_Spec.md`.
 
-Ten plik skupia się na:
+This file focuses on:
 
 - UX,
-- ekranach,
-- stanach i interakcjach.
+- screens,
+- states and interactions.
 
-Jest napisany tak, aby mógł spokojnie żyć w publicznym repo – bez wrażliwych szczegółów implementacyjnych.
-
----
-
-## 2. Założenia UX & brand
-
-### 2.1. Ogólny klimat
-
-- Cargo Bay jest **częścią AXV**, nie oddzielnym brandem:
-  - korzysta z tej samej **kolorystyki i typografii**,
-  - ma ten sam „nocny” klimat (ciemne tło, ocean, światła).
-- Tło:
-  - ciemny, nocny ocean / zatoka,
-  - w oddali **port / dock** z delikatnymi światłami (mogą lekko „żyć”, ale bez ciężkich animacji).
-- Warstwa UI:
-  - **półprzezroczysta „konsola” / panel** na tle oceanu,
-  - układ preferujący **szybkość, prostotę i czytelność**,
-  - animacje:
-    - szybkie, dyskretne (fade/slide),
-    - brak „ciężkich” efektów.
-
-Ten sam koncept działa:
-
-- w **web UI** – panel w centrum / lekko przesunięty,
-- w **mobile app** – panel jako pełnoekranowy widok z tym samym tłem (dostosowany do pionu).
-
-### 2.2. Priorytety UX
-
-1. **Szybko znaleźć swój sprzęt** (po QR, po liście misji).
-2. **Szybko oznaczyć stan** (szczególnie „spakowany na powrót”).
-3. **Nie przeszkadzać** – UI ma pomagać, nie męczyć.
+It is written so that it can safely live in a public repo – without sensitive implementation details.
 
 ---
 
-## 3. Role i poziomy dostępu
+## 2. UX & brand assumptions
 
-W Cargo Bay zakładamy trzy podstawowe role (v1):
+### 2.1. Overall mood
 
-- `warehouse` – magazyn / osoba odpowiedzialna za wydawanie i przyjmowanie sprzętu.
-- `crew` – osoby pracujące na evencie / statku (technicy, realizatorzy, stage crew).
-- `admin` – pełny dostęp (zarządzanie rolami, poprawki wyjątków).
+- Cargo Bay is **part of AXV**, not a separate brand:
+  - it reuses the same **colour palette and typography**,
+  - it has the same “night” mood (dark background, ocean, lights).
+- Background:
+  - dark, night ocean / bay,
+  - in the distance a **port / dock** with subtle lights (optionally slightly animated, but nothing heavy).
+- UI layer:
+  - a **semi‑transparent “console” / panel** on top of the ocean,
+  - layout optimised for **speed, simplicity and readability**,
+  - animations:
+    - fast, subtle (fade/slide),
+    - no heavy visual effects.
+
+The same concept works for:
+
+- **web UI** – panel centred or slightly offset,
+- **mobile app** – panel as full‑screen view, with the same background adapted to portrait.
+
+### 2.2. UX priorities
+
+1. **Find your gear fast** (via QR or mission list).
+2. **Mark state fast** (especially “packed for return”).
+3. **Stay out of the way** – UI should help, not fight the user.
+
+---
+
+## 3. Roles and access levels
+
+Cargo Bay v1 assumes three basic roles:
+
+- `warehouse` – person responsible for issuing and receiving gear.
+- `crew` – people working on events / on board (technicians, operators, stage crew).
+- `admin` – full access (roles, overrides, exceptional fixes).
 
 ### 3.1. warehouse
 
-Może:
+Can:
 
-- tworzyć i edytować **misje** (packing lists),
-- przypisywać assety (`asset_id`) do misji,
-- oznaczać sprzęt jako:
-  - `sent` – wysłany z Cargo Bay (wyjechał z magazynu),
-  - `returned` – potwierdzone, że fizycznie wrócił.
-- przeglądać pełne dane assetu (łącznie z polami finansowymi).
+- create and edit **missions** (packing lists),
+- assign assets (`asset_id`) to missions,
+- mark gear as:
+  - `sent` – left the warehouse / Cargo Bay,
+  - `returned` – physically confirmed back in storage,
+- view full asset details (including financial fields).
 
 ### 3.2. crew
 
-Może:
+Can:
 
-- zobaczyć **tylko misje, do których jest przypisany**,
-- na swojej misji:
-  - przeglądać listę sprzętu,
-  - otwierać karty katalogowe (po kliknięciu / po QR),
-  - oznaczać sprzęt jako:
-    - `packed` – spakowany po evencie, gotowy do powrotu,
-- nie widzi pól finansowych (`purchase_price`, `vendor`, `warranty` itp.).
+- see **only missions they are assigned to**,
+- within their mission:
+  - browse the gear list,
+  - open asset catalog cards (via click or QR),
+  - mark gear as:
+    - `packed` – packed after the event, ready to return,
+- does **not** see financial fields (`purchase_price`, `vendor`, `warranty`, etc.).
 
 ### 3.3. admin
 
-Może:
+Can:
 
-- wszystko, co `warehouse` i `crew`,
-- naprawiać błędy (np. korekta niewłaściwie oznaczonego `packed` / `sent`),
-- zarządzać uprawnieniami użytkowników.
-
----
-
-## 4. Główne widoki (web + mobile)
-
-### 4.1. Logowanie
-
-**Cel:**  
-Zanim ktoś zobaczy jakiekolwiek dane inventory, musi się zalogować.
-
-- Ekran prosty, ciemny, spójny z AXV:
-  - logo / nazwa `AXV Cargo Bay`,
-  - pola: `email / username`, `password`,
-  - przycisk `Log in`.
-- W apce (mobile) **również zawsze start od logowania**:
-  - nawet jeśli użytkownik przyszedł z QR,
-  - po zalogowaniu apka może utrzymywać sesję (wg standardowego timeoutu).
-
-Po poprawnym logowaniu użytkownik:
-
-- `crew` → trafia na widok **„My mission”**,
-- `warehouse` / `admin` → na widok **„Missions overview”** (lub ostatnio używany).
+- do everything `warehouse` and `crew` can do,
+- fix mistakes (e.g. wrong `packed` / `sent` state),
+- manage user permissions.
 
 ---
 
-### 4.2. Found device landing (web, user anonimowy)
+## 4. Main views (web + mobile)
 
-Endpoint publiczny:
+### 4.1. Login
+
+**Goal:**  
+No one sees any inventory data before logging in.
+
+- Simple, dark screen aligned with AXV:
+  - logo / name: `AXV Cargo Bay`,
+  - fields: `email / username`, `password`,
+  - button: `Log in`.
+- In the mobile app we **always start from login**:
+  - even if the user came from a QR scan,
+  - after logging in, the app may keep a session (according to standard timeout rules).
+
+After successful login:
+
+- `crew` → lands on **“My mission”**,
+- `warehouse` / `admin` → lands on **“Missions overview”** (or the last used screen).
+
+---
+
+### 4.2. Found device landing (web, anonymous user)
+
+Public endpoint:
 
 - `GET /a/{asset_id}`  
-  np. `https://cargobay.axv.life/a/AXV-0123`
+  e.g. `https://cargobay.axv.life/a/AXV-0123`
 
-**Gdy użytkownik nie jest zalogowany:**
+**When the user is not logged in:**
 
-Widok bardzo prosty, bez danych inventory:
+A very simple view, no inventory data:
 
-- komunikat:
-  - „This device belongs to AXV / tomedia.studio”
-- dane kontaktowe:
-  - e-mail,
-  - numer telefonu (firma),
-- krótki tekst:
-  - prośba o kontakt, jeśli urządzenie zostało znalezione po evencie.
-- przycisk:
-  - `Log in to AXV Cargo Bay` (dla załogi),
-  - po zalogowaniu następuje powrót do `/a/{asset_id}` jako **karta assetu**.
+- message:
+  - “This device belongs to AXV / tomedia.studio”
+- contact details:
+  - email,
+  - phone number (company),
+- short text:
+  - asking to contact if the device was found after an event.
+- button:
+  - `Log in to AXV Cargo Bay` (for crew),
+  - after login the user is redirected back to `/a/{asset_id}` as the **asset card**.
 
-Brak:
+No:
 
-- ceny,
-- lokalizacji,
-- jakichkolwiek wrażliwych szczegółów.
+- price,
+- location,
+- any sensitive details.
 
 ---
 
 ### 4.3. My mission (crew view)
 
-**Cel:**  
-Po zalogowaniu `crew` → od razu widok **swojego aktualnego eventu**.
+**Goal:**  
+After login, `crew` immediately sees their **current mission**.
 
-Elementy:
+Elements:
 
-- górny pasek:
-  - nazwa systemu: `AXV Cargo Bay`,
-  - label: `My mission: Mein Schiff 2` (lub `No active mission assigned`),
-  - po prawej: inicjały / avatar użytkownika (`VoyTech`).
+- top bar:
+  - system name: `AXV Cargo Bay`,
+  - label: `My mission: Mein Schiff 2` (or `No active mission assigned`),
+  - right side: user avatar / initials (`VoyTech`).
 
-- lista sprzętu na misji (tabela / lista):
+- gear list for the mission (table / list):
 
   | Packed | Asset ID   | Name                          | Container      |
   |--------|------------|-------------------------------|----------------|
@@ -171,15 +171,15 @@ Elementy:
   | ☑      | AXV-0450   | CB-AUDIO-01 – AV case        | –              |
   | ☐      | AXV-0071   | Router MikroTik RB5009UPr... | CB-NETWORK-01  |
 
-- kolumna **Name**:
-  - link do karty katalogowej assetu.
-- kolumna **Packed**:
-  - checkbox dostępny **po evencie** (kiedy pakujemy sprzęt do powrotu),
-  - logika szczegółowa w rozdziale 5.
+- **Name** column:
+  - link to the asset catalog card.
+- **Packed** column:
+  - checkbox used **after the event**, when packing gear for return,
+  - detailed behaviour in section 5.
 
-Na mobile:
+On mobile:
 
-- lista w formie kart / wierszy, np.:
+- list as stacked rows / cards, for example:
 
   ```
   [ ] AXV-0123
@@ -187,205 +187,205 @@ Na mobile:
       CB-AUDIO-01
   ```
 
-- tapnięcie w wiersz → otwarcie karty assetu.
+- tapping a row opens the asset card.
 
 ---
 
 ### 4.4. Missions overview (warehouse / admin)
 
-Widok dla `warehouse` / `admin`:
+View for `warehouse` / `admin`:
 
-- lista misji:
+- list of missions:
 
-  | Mission ID     | Name                     | From → To    | Status      |
-  |----------------|--------------------------|--------------|------------|
-  | mission_MS2    | Mein Schiff 2 – contract | CORE → MS    | In progress|
-  | mission_HQ     | HQ visit Dec 2025        | CORE → HQ    | Planned    |
-  | mission_CONF01 | Small AV conference      | HQ → OTHER   | Completed  |
+  | Mission ID     | Name                     | From → To    | Status       |
+  |----------------|--------------------------|--------------|-------------|
+  | mission_MS2    | Mein Schiff 2 – contract | CORE → MS    | In progress |
+  | mission_HQ     | HQ visit Dec 2025        | CORE → HQ    | Planned     |
+  | mission_CONF01 | Small AV conference      | HQ → OTHER   | Completed   |
 
-- możliwość:
-  - filtrowania po statusie (`Planned`, `In progress`, `Completed`),
-  - otwarcia szczegółów misji.
+- capabilities:
+  - filter by status (`Planned`, `In progress`, `Completed`),
+  - open mission details.
 
-Widok misji (szczegóły):
+Mission detail view:
 
-- tabela podobna do `My mission`, ale z dodatkowymi kolumnami:
+- table similar to `My mission`, but with extra columns:
 
   | Sent | Packed | Returned | Asset ID | Name | Container | Notes |
 
-- `warehouse` może:
-  - oznaczać `sent` (sprzęt opuścił magazyn),
-  - oznaczać `returned` (sprzęt wrócił),
-- `packed` jest kontrolowane przez `crew`.
+- `warehouse` can:
+  - set `Sent` (gear left the warehouse),
+  - set `Returned` (gear is back),
+- `Packed` is controlled by `crew`.
 
 ---
 
-### 4.5. Asset card (karta katalogowa)
+### 4.5. Asset card (catalog card)
 
-Widok dla **załogi** (po zalogowaniu i wejściu na `/a/{asset_id}` lub z listy).
+View for **crew** (after login and coming from `/a/{asset_id}` or from a list).
 
-Sekcje:
+Sections:
 
-1. **Nagłówek:**
-   - duże `AXV-0123`,
-   - nazwa: `RME Fireface UCX II`,
-   - mały label misji, jeśli asset jest w aktualnej misji:
+1. **Header:**
+   - large `AXV-0123`,
+   - name: `RME Fireface UCX II`,
+   - small mission label if the asset belongs to the user’s current mission:
      - `Assigned to: mission_MS2`.
 
-2. **Stan operacyjny (crew):**
+2. **Operational state (crew):**
    - `Status: in_use / spare / service / lost`,
    - `Packed for return: [ ☐ packed ]`:
-     - checkbox widoczny i używalny, jeśli asset jest przypisany do aktywnej misji użytkownika.
-   - informacja:
-     - `Last packed by: <user> at <timestamp>` (jeśli `packed = true`).
+     - checkbox visible and active if the asset is assigned to an active mission for this user.
+   - info:
+     - `Last packed by: <user> at <timestamp>` (if `packed = true`).
 
-3. **Lokalizacja i container:**
+3. **Location and container:**
    - `Location: CORE / HQ / MS / OTHER`,
    - `Location detail: ...`,
-   - `Container: CB-...` (jeśli dotyczy).
+   - `Container: CB-...` (if applicable).
 
-4. **Dane techniczne (crew):**
-   - pola przydatne na evencie:
-     - np. `Power`, `I/O summary`, krótkie notatki.
+4. **Technical data (crew):**
+   - fields useful on site:
+     - e.g. `Power`, `I/O summary`, short notes.
 
-5. **Zakładka „Details” (tylko warehouse/admin):**
+5. **“Details” tab (warehouse/admin only):**
    - `purchase_date`,
    - `purchase_price`,
    - `vendor`,
    - `warranty_until`,
-   - inne pola wrażliwe.
+   - other sensitive fields.
 
-Na mobile:
+On mobile:
 
-- layout pionowy,
-- przycisk `Mark as packed` łatwo dostępny pod kciukiem.
+- vertical layout,
+- `Mark as packed` button placed conveniently under the thumb.
 
 ---
 
-## 5. Stany i zasady interakcji (sent / packed / returned)
+## 5. States and interaction rules (sent / packed / returned)
 
-Przyjmujemy, że każdy wpis w packing liście (tabela `packing_list_items` w backendzie) ma pola:
+Each entry in a packing list (backend table `packing_list_items`) has at least:
 
 - `sent` (bool), `sent_by`, `sent_at`,
 - `packed` (bool), `packed_by`, `packed_at`,
-- w przyszłości opcjonalnie `returned` (bool), `returned_by`, `returned_at`.
+- optionally later: `returned` (bool), `returned_by`, `returned_at`.
 
-### 5.1. Zasady dla `sent`
+### 5.1. Rules for `sent`
 
-- Może ustawić tylko:
-  - `warehouse` (lub `admin`).
-- Interpretacja:
-  - sprzęt został fizycznie spakowany i opuścił magazyn,
-  - odpowiedzialność za ten krok jest po stronie magazynu.
-
-UI:
-
-- w widoku misji:
-  - kolumna `Sent` z checkboxem edytowalnym dla `warehouse`,
-  - `crew` widzi tylko odczyt.
-
-### 5.2. Zasady dla `packed` (po evencie)
-
-- Może ustawić tylko:
-  - użytkownik z rolą `crew` przypisany do danej misji (lub `admin`).
-- Interpretacja:
-  - sprzęt został po evencie spakowany do powrotu (np. włożony do kontenera / skrzyni).
-
-**Ważna reguła:**
-
-> Tylko użytkownik, który **ostatnio ustawił `packed = true`**, może cofnąć to oznaczenie.
-
-- jeśli `packed = true` i `packed_by = user_X`:
-  - tylko `user_X` widzi aktywny checkbox (może odznaczyć),
-  - inni widzą stan jako „zablokowany” (np. tooltip: „Marked by user_X”).
-- `admin` może zawsze wymusić korektę (override) – w osobnym, świadomym trybie.
+- Can only be set by:
+  - `warehouse` (or `admin`).
+- Meaning:
+  - gear has been physically packed and left the warehouse / Cargo Bay,
+  - responsibility for this step is on the warehouse side.
 
 UI:
 
-- w `My mission`:
-  - `crew` widzi checkbox „Packed” i może kliknąć dla swojej misji,
-  - po kliknięciu:
-    - natychmiastowa aktualizacja,
-    - małe potwierdzenie (toast): „Marked AXV-0123 as packed”.
-- w `Asset card`:
-  - ten sam stan jest widoczny,
-  - `Mark as packed` / `Unpack` działa identycznie (aktualizuje te same dane).
+- in mission view:
+  - `Sent` column with an editable checkbox for `warehouse`,
+  - `crew` sees it read‑only.
 
-### 5.3. Zasady dla `returned` (opcjonalne v1.1)
+### 5.2. Rules for `packed` (after the event)
 
-- Może ustawić tylko:
+- Can only be set by:
+  - a user with `crew` role assigned to the mission (or `admin`).
+- Meaning:
+  - gear has been packed after the event for return (e.g. back in its case / container).
+
+**Important rule:**
+
+> Only the user who **last set `packed = true`** may undo this.
+
+- If `packed = true` and `packed_by = user_X`:
+  - only `user_X` sees an active checkbox and can uncheck it,
+  - others see it as locked (e.g. tooltip: “Marked by user_X”).
+- `admin` may always override in a dedicated, explicit flow.
+
+UI:
+
+- in `My mission`:
+  - `crew` sees the “Packed” checkbox and can click it for their mission,
+  - after clicking:
+    - we update state immediately,
+    - show a small toast: “Marked AXV-0123 as packed”.
+- in the asset card:
+  - the same state is visible,
+  - `Mark as packed` / `Unpack` acts on the same fields.
+
+### 5.3. Rules for `returned` (optional v1.1)
+
+- Can only be set by:
   - `warehouse` / `admin`.
-- Interpretacja:
-  - sprzęt fizycznie wrócił do magazynu / lokalizacji docelowej po misji.
+- Meaning:
+  - gear physically returned to target storage after the mission.
 
-UI (później):
+UI (later):
 
-- w widoku misji:
-  - `Returned` jako dodatkowa kolumna,
-  - używane do „zamknięcia” misji.
+- mission view:
+  - `Returned` as an extra column,
+  - used to “close” the mission.
 
 ---
 
-## 6. QR i integracja z appką
+## 6. QR and app integration
 
-### 6.1. Zawartość QR
+### 6.1. QR contents
 
-Na każdej etykiecie QR koduje **jeden, spójny format URL**:
+Every label’s QR code encodes **one, consistent URL format**:
 
 > `https://cargobay.axv.life/a/{asset_id}`  
-> np. `https://cargobay.axv.life/a/AXV-0123`
+> e.g. `https://cargobay.axv.life/a/AXV-0123`
 
 - Web:
-  - przeglądarka otwiera ten adres,
-  - zachowanie zależy od tego, czy użytkownik jest zalogowany:
-    - niezalogowany → „Found device landing”,
-    - zalogowany → karta assetu.
+  - the browser opens this URL,
+  - behaviour depends on login state:
+    - not logged in → “Found device landing”,
+    - logged in → asset card.
 - Mobile app:
-  - może rejestrować się jako handler dla adresów `cargobay.axv.life`,
-  - przechwytuje URL,
-  - parsuje `{asset_id}` z końcówki,
-  - pobiera dane z API (`GET /api/assets/{asset_id}`),
-  - wyświetla kartę assetu w natywnym UI.
+  - can register as a handler for `cargobay.axv.life` URLs,
+  - intercepts the URL,
+  - parses `{asset_id}` from the end,
+  - fetches data from API (`GET /api/assets/{asset_id}`),
+  - shows the asset card in native UI.
 
-### 6.2. Etykiety – mini spec (związane z UI)
+### 6.2. Labels – mini spec (UI‑related parts)
 
 **Label type: Brother 12mm (mini)**
 
 - QR: `https://cargobay.axv.life/a/{asset_id}`
-- Układ:
-  - środek: QR,
-  - pionowy tekst po jednej stronie:
-    - `{asset_id}` (np. `AXV-0123`),
-  - opcjonalnie: po drugiej stronie pionowo `AXV`, jeśli czytelność na to pozwala.
-- Brak logo / pełnej nazwy firmy – to jest czysty ID‑tag.
+- Layout:
+  - centre: QR,
+  - vertical text on one side:
+    - `{asset_id}` (e.g. `AXV-0123`),
+  - optionally vertical `AXV` on the other side, if legible.
+- No logo / full company name – this is a pure ID tag.
 
 **Label type: Brother 24mm**
 
-- QR + `asset_id` + skrócona nazwa właściciela:
-  - np. linia tekstu: `AXV-0123  |  AXV`,
-  - druga linia: nazwa assetu lub `container_id`.
-- Przeznaczenie:
-  - większe urządzenia, skrzynie, case’y.
+- QR + `asset_id` + short owner text:
+  - e.g. first line: `AXV-0123  |  AXV`,
+  - second line: asset name or `container_id`.
+- Intended for:
+  - larger devices, cases, racks.
 
 **Label type: A4 (48.5 × 25.4 mm)**
 
 - QR,
-- `AXV-0123` (większa czcionka),
+- `AXV-0123` (larger font),
 - `Owned by: AXV / tomedia.studio`,
-- nazwa assetu / case’a,
-- ewentualnie drobny `cargobay.axv.life/a/AXV-0123`.
+- asset / case name,
+- optional small `cargobay.axv.life/a/AXV-0123`.
 
 ---
 
-## 7. Roadmapa implementacyjna (w kontekście UI)
+## 7. Implementation roadmap (UI‑related)
 
-1. **v1 – Backend + API (bez UI):**
-   - DB `assets` + `packing_lists` + `packing_list_items`,
-   - endpointy:
+1. **v1 – Backend + API (no UI yet):**
+   - DB: `assets` + `packing_lists` + `packing_list_items`,
+   - endpoints:
      - `GET /api/assets/{asset_id}`,
      - `GET /api/missions/{mission_id}`,
-     - `GET /api/missions` (lista),
-     - podstawowe `PATCH` dla `sent` / `packed`.
+     - `GET /api/missions` (list),
+     - basic `PATCH` for `sent` / `packed`.
 2. **v1.1 – Web UI (MVP):**
    - `Login`,
    - `Found device landing`,
@@ -393,27 +393,26 @@ Na każdej etykiecie QR koduje **jeden, spójny format URL**:
    - `Missions overview` (warehouse),
    - `Asset card`.
 3. **v1.2 – UX polish + roles:**
-   - rozgraniczenie widoczności pól (crew vs warehouse),
-   - blokada uncheck `packed` dla innych użytkowników,
-   - prosty event log (na poziomie UI).
+   - field visibility (crew vs warehouse),
+   - block uncheck of `packed` for other users,
+   - simple event log (surfaced in the UI).
 4. **v2 – Mobile app / PWA:**
-   - natywne skanowanie QR,
-   - obsługa tych samych endpointów,
-   - offline cache (opcjonalnie),
-   - integracja z rolami AXV.
+   - native QR scanning,
+   - same endpoints as web,
+   - optional offline cache,
+   - integration with AXV roles.
 
 ---
 
-## 8. Uwagi dot. publikacji
+## 8. Publication notes
 
-Ten dokument:
+This document:
 
-- **nie zawiera** haseł, tokenów, kluczy ani konkretnych adresów infrastruktury,
-- opisuje **wysokopoziomowe UI i przepływy**, które są bezpieczne do publikacji,
-- może spokojnie żyć w repo `axv-docs` jako:
+- **does not contain** passwords, tokens, keys or specific infrastructure addresses,
+- describes **high‑level UX and flows** which are safe to publish,
+- can safely live in `axv-docs` as:
   - `06_AXV_Cargo_Bay_UI_and_Flows.md`.
 
-Wrażliwe szczegóły (np. konkretne polityki haseł, konfiguracje serwerów, szczegółowe logowanie bezpieczeństwa) warto opisać osobno, w:
+Sensitive details (password policies, server configs, detailed security logging) should be documented separately in a private:
 
-- `AXV Internal Docs` (prywatne repo / prywatny storage).
-
+- `AXV Internal Docs` repo / storage.
