@@ -91,16 +91,14 @@ Logiczny lub fizyczny „pojemnik”, który może zawierać wiele assetów, np.
 - organizer z DIY rzeczami,
 - walizka z przystosowanym setupem,
 - skrzynia AV,
-- case „AXV-Live-Small-Conference”.
+- case `AXV-Live-Small-Conference`.
 
 Reprezentacja:
 
-- na v1 (Sheets): `container` to **pole tekstowe** w rekordzie assetu:
-  - np. `DIY-BOX-01`, `CASE-AV-SMALL-01`.
-- w v2 (DB): opcja 1:
-  - `container` jako tekst,  
-  opcja 2 (później):
-  - osobna tabela lub self-FK (asset jako container asset).
+- w v1 (Sheets): `container` to **pole tekstowe** w rekordzie assetu  
+  np. `DIY-BOX-01`, `CASE-AV-SMALL-01`.
+- w v2 (DB): opcja 1 – `container` jako tekst,  
+  opcja 2 (później) – osobna tabela lub self-FK (asset jako container asset).
 
 Na start przyjmujemy **prostą wersję tekstową**.
 
@@ -115,7 +113,7 @@ Packing lista:
 
 - ma swój identyfikator (`mission_id`),
 - składa się z wierszy:
-  - `asset_id` **lub** `extra_name` (ubernia, dokumenty itd.),
+  - `asset_id` **lub** `extra_name` (ubrania, dokumenty itd.),
   - meta:
     - `priority`,
     - `from_location` / `to_location`,
@@ -227,16 +225,14 @@ Proponowany układ kolumn (odpowiada temu, co już mamy):
 - `packed` – checkbox / `YES/NO`.
 - `notes` – komentarze.
 
-Formuły (v1, logika):
+Logika formuł (v1):
 
 - `item_type`:
   - jeśli `asset_id` pasuje do `AXV-\d{4}` → `asset`,
-  - inaczej → `extra` (na razie wystarczy).
+  - inaczej → `extra`.
 - `name`:
   - jeśli `item_type = asset` → `VLOOKUP(asset_id, CargoBay!...)`,
   - inaczej → `extra_name`.
-
-To już w praktyce mamy zaczęte.
 
 ---
 
@@ -244,42 +240,195 @@ To już w praktyce mamy zaczęte.
 
 Docelowa tabela w MariaDB (pierwsza wersja):
 
-```text
-Table: assets
+```sql
+CREATE TABLE assets (
+  id                 INT AUTO_INCREMENT PRIMARY KEY,
+  asset_id           VARCHAR(32)  NOT NULL UNIQUE,
+  name               VARCHAR(255) NOT NULL,
+  description        TEXT         NULL,
 
-id                  INT AUTO_INCREMENT PRIMARY KEY
-asset_id            VARCHAR(32)  NOT NULL UNIQUE
-name                VARCHAR(255) NOT NULL
-description         TEXT         NULL
+  location           ENUM('CORE','HQ','MS','OTHER') NOT NULL DEFAULT 'CORE',
+  location_detail    VARCHAR(255) NULL,
 
-location            ENUM('CORE','HQ','MS','OTHER') NOT NULL DEFAULT 'CORE'
-location_detail     VARCHAR(255) NULL
+  category_group     VARCHAR(64)  NULL,
+  category           VARCHAR(64)  NULL,
 
-category_group      VARCHAR(64)  NULL
-category            VARCHAR(64)  NULL
+  item_type          ENUM('asset','consumable','container','other')
+                     NOT NULL DEFAULT 'asset',
 
-item_type           ENUM('asset','consumable','container','other')
-                    NOT NULL DEFAULT 'asset'
+  status             ENUM('in_use','spare','service','retired','lost')
+                     NOT NULL DEFAULT 'spare',
 
-status              ENUM('in_use','spare','service','retired','lost')
-                    NOT NULL DEFAULT 'spare'
+  container          VARCHAR(64)  NULL,
+  -- opcjonalnie w przyszłości: container_id INT, FK do assets.id
 
-container           VARCHAR(64)  NULL
--- (opcjonalnie w przyszłości: container_id INT, FK do assets.id)
+  reservation_status ENUM('free','reserved')
+                     NOT NULL DEFAULT 'free',
 
-reservation_status  ENUM('free','reserved')
-                    NOT NULL DEFAULT 'free'
+  priority           ENUM('P1','P2','P3','P4') NULL,
 
-priority            ENUM('P1','P2','P3','P4') NULL
+  serial_number      VARCHAR(128) NULL,
+  purchase_date      DATE         NULL,
+  purchase_price     DECIMAL(10,2) NULL,
+  vendor             VARCHAR(255) NULL,
+  warranty_until     DATE         NULL,
 
-serial_number       VARCHAR(128) NULL
-purchase_date       DATE         NULL
-purchase_price      DECIMAL(10,2) NULL
-vendor              VARCHAR(255) NULL
-warranty_until      DATE         NULL
+  tags               VARCHAR(255) NULL,
 
-tags                VARCHAR(255) NULL
+  created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                     ON UPDATE CURRENT_TIMESTAMP
+);
+```
 
-created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-                    ON UPDATE CURRENT_TIMESTAMP
+Założenia:
+
+- `asset_id` jest głównym, zewnętrznym ID:
+  - używany w QR, API, frontach.
+- `id` (INT) jest **wewnętrznym** PK (wygodnym dla relacji).
+- `container` na v2 dalej jako tekst:
+  - dopiero później możemy wprowadzić relację:
+    - asset jako `container` dla innych (self-FK).
+
+---
+
+## 7. Packing listy v2 — `packing_lists` i `packing_list_items`
+
+Propozycja v2 (DB):
+
+```sql
+CREATE TABLE packing_lists (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  mission_id     VARCHAR(64) NOT NULL UNIQUE,
+  name           VARCHAR(255) NOT NULL,
+  description    TEXT NULL,
+
+  from_location  ENUM('CORE','HQ','MS','OTHER') NULL,
+  to_location    ENUM('CORE','HQ','MS','OTHER') NULL,
+
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                 ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+```sql
+CREATE TABLE packing_list_items (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  packing_list_id   INT NOT NULL,
+  CONSTRAINT fk_packing_list
+    FOREIGN KEY (packing_list_id) REFERENCES packing_lists(id),
+
+  item_type         ENUM('asset','extra','container') NOT NULL,
+
+  asset_id          VARCHAR(32)   NULL,  -- jeśli item_type = 'asset'
+  extra_name        VARCHAR(255)  NULL,  -- jeśli item_type = 'extra'
+
+  priority          ENUM('P1','P2','P3','P4') NULL,
+  qty               INT NOT NULL DEFAULT 1,
+
+  from_location     ENUM('CORE','HQ','MS','OTHER') NULL,
+  to_location       ENUM('CORE','HQ','MS','OTHER') NULL,
+
+  packed            TINYINT(1) NOT NULL DEFAULT 0,
+  notes             TEXT NULL
+);
+```
+
+Logika:
+
+- `item_type` decyduje, które pola są używane:
+  - `asset` → `asset_id` (lookup do `assets`),
+  - `extra` → `extra_name`,
+  - `container` → na razie może używać `extra_name`, później `container_id`.
+- `mission_id` może odpowiadać zakładce `mission_*` w v1.
+
+---
+
+## 8. QR, etykiety i URL
+
+Każdy asset ma:
+
+- tekst: `asset_id` (np. `AXV-0123`),
+- QR kod prowadzący do:
+  - `https://cargobay.axv.life/a/AXV-0123`.
+
+Minimalny endpoint (v2):
+
+- `GET /a/{asset_id}`:
+  - zwraca stronę:
+    - `asset_id`,
+    - `name`,
+    - `location`, `location_detail`,
+    - `status`, `reservation_status`,
+    - `container`,
+    - podstawowe meta (`category_group`, `category`, `notes`),
+  - dostępny **tylko po zalogowaniu / autoryzacji** (non-public).
+
+W przyszłości:
+
+- `GET /api/assets/{asset_id}` – JSON dla mobilki / innych systemów.
+
+---
+
+## 9. Integracja z resztą AXV
+
+### 9.1. MASTER HUB
+
+Cargo Bay pojawia się w MASTER HUB jako:
+
+- osobna pozycja typu `System / Inventory`,
+- z linkami:
+  - do arkusza v1 (Sheets),
+  - do specy (ten plik),
+  - do przyszłego UI / API.
+
+### 9.2. AXV @ Sea
+
+Packing listy są kluczowe dla misji @Sea:
+
+- `mission_MS2` → co trzeba zabrać na statek,
+- filtr po `location = CORE/HQ` + `to_location = MS`.
+
+W trybie @Sea:
+
+- Cargo Bay UI powinno mieć **lekki widok**:
+  - lista rzeczy na aktualną misję,
+  - status (`packed`, `reserved`),
+  - podgląd kart assetów.
+
+### 9.3. n8n / automatyzacje
+
+Przyszłe flow (przykłady):
+
+- sync arkusza v1 → MariaDB (import),
+- codzienny eksport stanu `assets`:
+  - do backupu,
+  - do Atlas (RAG),
+- powiadomienia:
+  - o assetach ze statusem `service`,
+  - o assetach oznaczonych jako `lost`.
+
+---
+
+## 10. Dalsza ewolucja
+
+Ten dokument jest punktem startowym. Następne iteracje mogą:
+
+- doprecyzować:
+  - słowniki `category_group` / `category`,
+  - reguły użycia `container`,
+  - statusy (`status`, `reservation_status`),
+- opisać:
+  - migrację z arkusza v1 do MariaDB v2,
+  - szczegóły API (`/api/assets`, `/api/missions`, `/api/packing-lists`),
+  - powiązania z Atlas (RAG po inventory).
+
+Powinien być czytany razem z:
+
+- `01_AXV_Manifest_north star.md`
+- `02_AXV_Operating_Modes.md`
+- `03_AXV_Crew_and_Roles.md`
+- `04_AXV_Projects_and_K_Modules.md`
+
+Razem tworzą one **szkielet AXV Cargo Bay i całej platformy**.
